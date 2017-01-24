@@ -107,4 +107,11 @@ target_link_libraries(stinger_streaming_connected_components stinger_utils)
 
 ##############################################################################
 
+set(_insert_remove_benchmark_dimacs_sources
+  insert_remove_benchmark_dimacs/main.c
+)
 
+add_executable(stinger_insert_remove_benchmark_dimacs ${_insert_remove_benchmark_dimacs_sources})
+target_link_libraries(stinger_insert_remove_benchmark_dimacs stinger_utils)
+
+##############################################################################

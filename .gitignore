@@ -29,3 +29,22 @@
 
 *.pickle
 /flask/stinger_paths.py
+
+external/
+lib/
+share/
+bin/
+.gitignore
+DartConfiguration.tcl
+include/
+stinger_net/
+
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
