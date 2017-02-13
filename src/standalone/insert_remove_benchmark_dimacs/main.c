@@ -146,106 +146,115 @@ main (const int argc, char *argv[])
   STATS_INIT();
 
   S = load_csr(initial_graph_name);
-  for(batch_size = 1000; batch_size < 10*ne; batch_size*=10) {
-      nbatch = 10;
-      naction = batch_size*nbatch;
-      print_initial_graph_stats (nv, ne, batch_size, nbatch, naction);
-      fflush(stdout);
-      BATCH_SIZE_CHECK();
+  for(batch_size = 1000; batch_size < ne/2; batch_size*=2) {
+    nbatch = 10;
+    naction = batch_size*nbatch;
+    action = (int64_t*) malloc(2*batch_size*sizeof(int64_t));
+    print_initial_graph_stats (nv, ne, batch_size, nbatch, naction);
+    fflush(stdout);
+    BATCH_SIZE_CHECK();
 
 #if defined(_OPENMP)
-      /* OMP("omp parallel") */
-        {
-          /* OMP("omp master") */
-            PRINT_STAT_INT64 ("num_threads", (long int) omp_get_num_threads());
-        }
+    /* OMP("omp parallel") */
+    {
+      /* OMP("omp master") */
+      PRINT_STAT_INT64 ("num_threads", (long int) omp_get_num_threads());
+    }
 #endif
 
-      insert_time_trace = xmalloc (nbatch * sizeof(*insert_time_trace));
-      delete_time_trace = xmalloc (nbatch * sizeof(*delete_time_trace));
+    insert_time_trace = xmalloc (nbatch * sizeof(*insert_time_trace));
+    delete_time_trace = xmalloc (nbatch * sizeof(*delete_time_trace));
 
-      /* Convert to STINGER */
-      tic ();
-      uint32_t errorCode = stinger_consistency_check (S, nv);
-      double time_check = toc ();
-      /* PRINT_STAT_HEX64 ("error_code", (long unsigned) errorCode); */
-      /* PRINT_STAT_DOUBLE ("time_check", time_check); */
+    /* Convert to STINGER */
+    tic ();
+    uint32_t errorCode = stinger_consistency_check (S, nv);
+    double time_check = toc ();
+    /* PRINT_STAT_HEX64 ("error_code", (long unsigned) errorCode); */
+    /* PRINT_STAT_DOUBLE ("time_check", time_check); */
 
-      /* Updates */
-      int64_t ntrace = 0;
-      srand(batch_size);
-      for (int64_t actno = 0; actno < nbatch * batch_size; actno += batch_size)
-        {
-          tic();
+    /* Updates */
+    int64_t ntrace = 0;
+    srand(batch_size);
+    for (int64_t actno = 0; actno < nbatch * batch_size; actno += batch_size)
+      {
 
-          const int64_t endact = (actno + batch_size > naction ? naction : actno + batch_size);
-          int64_t *actions = &action[2*actno];
-          int64_t numActions = endact - actno;
+        const int64_t endact = (actno + batch_size > naction ? naction : actno + batch_size);
+        int64_t numActions = endact - actno;
+        for(uint64_t k = 0; k < numActions; k++) {
+          const int64_t i = rand() % nv;
+          const int64_t j = rand() % nv;
+          ACTI(k) = i;
+          ACTJ(k) = j;
+        }
 
-          /* MTA("mta assert parallel") */
-            /* MTA("mta block dynamic schedule") */
-            /* OMP("omp parallel for") */
-            for(uint64_t k = 0; k < endact - actno; k++) {
-              const int64_t i = rand() % nv;
-              const int64_t j = rand() % nv;
-              stinger_insert_edge (S, 0, i, j, 1, actno+2);
-            }
+        tic();
+        /* MTA("mta assert parallel") */
+        /* MTA("mta block dynamic schedule") */
+        /* OMP("omp parallel for") */
+        for(uint64_t k = 0; k < numActions; k++) {
+          stinger_insert_edge (S, 0, ACTI(k), ACTJ(k), 1, actno+2);
+        }
 
-          insert_time_trace[ntrace] = toc();
-          ntrace++;
+        insert_time_trace[ntrace] = toc();
+        ntrace++;
 
-        } /* End of batch */
+      } /* End of batch */
 
-      ntrace = 0;
-      srand(batch_size);
-      for (int64_t actno = 0; actno < nbatch * batch_size; actno += batch_size)
-        {
-          tic();
+    ntrace = 0;
+    srand(batch_size);
+    for (int64_t actno = 0; actno < nbatch * batch_size; actno += batch_size)
+      {
 
-          const int64_t endact = (actno + batch_size > naction ? naction : actno + batch_size);
-          int64_t *actions = &action[2*actno];
-          int64_t numActions = endact - actno;
+        const int64_t endact = (actno + batch_size > naction ? naction : actno + batch_size);
+        int64_t numActions = endact - actno;
 
-          /* MTA("mta assert parallel") */
-          /*   MTA("mta block dynamic schedule") */
-          /*   OMP("omp parallel for") */
-            for(uint64_t k = 0; k < endact - actno; k++) {
-              const int64_t i = rand() % nv;
-              const int64_t j = rand() % nv;
-              stinger_remove_edge(S, 0, i, j);
-            }
+        /* MTA("mta assert parallel") */
+        /*   MTA("mta block dynamic schedule") */
+        /*   OMP("omp parallel for") */
+        for(uint64_t k = 0; k < endact - actno; k++) {
+          const int64_t i = rand() % nv;
+          const int64_t j = rand() % nv;
+          ACTI(k) = i;
+          ACTJ(k) = j;
+        }
 
-          delete_time_trace[ntrace] = toc();
-          ntrace++;
+        tic();
+        for(uint64_t k = 0; k < endact - actno; k++) {
+          stinger_remove_edge(S, 0, ACTI(k), ACTJ(k));
+        }
 
-        } /* End of batch */
+        delete_time_trace[ntrace] = toc();
+        ntrace++;
 
-      /* Print the times */
-      double time_insert = 0;
-      for (int64_t k = 0; k < nbatch; k++) {
-        time_insert += insert_time_trace[k];
-      }
-      PRINT_STAT_DOUBLE ("time_insert", time_insert/nbatch);
-      /* PRINT_STAT_DOUBLE ("insert_per_sec", (nbatch * batch_size) / time_insert);  */
+      } /* End of batch */
 
-      double time_delete = 0;
-      for (int64_t k = 0; k < nbatch; k++) {
-        time_delete += delete_time_trace[k];
-      }
-      PRINT_STAT_DOUBLE ("time_delete", time_delete/nbatch);
-      /* PRINT_STAT_DOUBLE ("delete_per_sec", (nbatch * batch_size) / time_delete);  */
-
-      tic ();
-      errorCode = stinger_consistency_check (S, nv);
-      time_check = toc ();
-      fflush(stdout);
-      /* PRINT_STAT_HEX64 ("error_code", (long unsigned) errorCode); */
-      /* PRINT_STAT_DOUBLE ("time_check", time_check); */
-
-      free(insert_time_trace);
-      free(delete_time_trace);
-      stinger_free_all (S);
+    /* Print the times */
+    double time_insert = 0;
+    for (int64_t k = 0; k < nbatch; k++) {
+      time_insert += insert_time_trace[k];
     }
+    PRINT_STAT_DOUBLE ("time_insert", time_insert/nbatch);
+    /* PRINT_STAT_DOUBLE ("insert_per_sec", (nbatch * batch_size) / time_insert);  */
+
+    double time_delete = 0;
+    for (int64_t k = 0; k < nbatch; k++) {
+      time_delete += delete_time_trace[k];
+    }
+    PRINT_STAT_DOUBLE ("time_delete", time_delete/nbatch);
+    /* PRINT_STAT_DOUBLE ("delete_per_sec", (nbatch * batch_size) / time_delete);  */
+
+    tic ();
+    errorCode = stinger_consistency_check (S, nv);
+    time_check = toc ();
+    fflush(stdout);
+    /* PRINT_STAT_HEX64 ("error_code", (long unsigned) errorCode); */
+    /* PRINT_STAT_DOUBLE ("time_check", time_check); */
+
+    free(insert_time_trace);
+    free(delete_time_trace);
+    free(action);
+  }
+  stinger_free_all (S);
   STATS_END();
   fflush(stdout);
 }
