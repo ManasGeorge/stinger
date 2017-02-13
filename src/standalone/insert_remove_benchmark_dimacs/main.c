@@ -2,10 +2,11 @@
 #define _XOPEN_SOURCE 600
 #define _LARGEFILE64_SOURCE 1
 #define _FILE_OFFSET_BITS 64
+#undef _OPENMP
 
-#if defined(_OPENMP)
-#include "omp.h"
-#endif
+// #if defined(_OPENMP)
+// #include "omp.h"
+// #endif
 
 #include "stinger_core/stinger_atomics.h"
 #include "stinger_utils/stinger_utils.h"
@@ -54,6 +55,7 @@ int getline(char **line, size_t *n, FILE* fp) {
 void readGraphDIMACS(char* filePath, int64_t** prmoff, int64_t** prmind,
                      int64_t* prmnv, int64_t* prmne, int isRmat)
 {
+    printf("Filename: %s\n",filePath);
     FILE *fp = fopen (filePath, "r");
     char* line = NULL;
 
@@ -140,22 +142,21 @@ struct stinger* load_csr(char * name){
 int
 main (const int argc, char *argv[])
 {
-  printf("HELLO THIS IS IMPOSSIBLE TO MISS\n");
   parse_args (argc, argv, &initial_graph_name, &action_stream_name, &batch_size, &nbatch);
   STATS_INIT();
 
   S = load_csr(initial_graph_name);
-  for(batch_size = 1000; batch_size <= 10*ne; batch_size*=10) {
-      S = load_csr(initial_graph_name);
+  for(batch_size = 1000; batch_size < 10*ne; batch_size*=10) {
       nbatch = 10;
       naction = batch_size*nbatch;
       print_initial_graph_stats (nv, ne, batch_size, nbatch, naction);
+      fflush(stdout);
       BATCH_SIZE_CHECK();
 
 #if defined(_OPENMP)
-      OMP("omp parallel")
+      /* OMP("omp parallel") */
         {
-          OMP("omp master")
+          /* OMP("omp master") */
             PRINT_STAT_INT64 ("num_threads", (long int) omp_get_num_threads());
         }
 #endif
@@ -181,9 +182,9 @@ main (const int argc, char *argv[])
           int64_t *actions = &action[2*actno];
           int64_t numActions = endact - actno;
 
-          MTA("mta assert parallel")
-            MTA("mta block dynamic schedule")
-            OMP("omp parallel for")
+          /* MTA("mta assert parallel") */
+            /* MTA("mta block dynamic schedule") */
+            /* OMP("omp parallel for") */
             for(uint64_t k = 0; k < endact - actno; k++) {
               const int64_t i = rand() % nv;
               const int64_t j = rand() % nv;
@@ -205,9 +206,9 @@ main (const int argc, char *argv[])
           int64_t *actions = &action[2*actno];
           int64_t numActions = endact - actno;
 
-          MTA("mta assert parallel")
-            MTA("mta block dynamic schedule")
-            OMP("omp parallel for")
+          /* MTA("mta assert parallel") */
+          /*   MTA("mta block dynamic schedule") */
+          /*   OMP("omp parallel for") */
             for(uint64_t k = 0; k < endact - actno; k++) {
               const int64_t i = rand() % nv;
               const int64_t j = rand() % nv;
@@ -237,6 +238,7 @@ main (const int argc, char *argv[])
       tic ();
       errorCode = stinger_consistency_check (S, nv);
       time_check = toc ();
+      fflush(stdout);
       /* PRINT_STAT_HEX64 ("error_code", (long unsigned) errorCode); */
       /* PRINT_STAT_DOUBLE ("time_check", time_check); */
 
@@ -245,5 +247,5 @@ main (const int argc, char *argv[])
       stinger_free_all (S);
     }
   STATS_END();
+  fflush(stdout);
 }
-
