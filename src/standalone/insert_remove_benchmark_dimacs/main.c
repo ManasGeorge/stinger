@@ -139,6 +139,31 @@ struct stinger* load_csr(char * name){
   return ret;
 }
 
+void random_edges(int n) {
+  for(uint64_t k = 0; k < n; k++) {
+    const int64_t i = rand() % nv;
+    const int64_t j = rand() % nv;
+    ACTI(k) = i;
+    ACTJ(k) = j;
+  }
+}
+
+void existing_edges(int n) {
+  int64_t k;
+  k = 0;
+  for (int64_t v=0; v < nv; v++) {
+    STINGER_FORALL_EDGES_OF_VTX_BEGIN(S,v) {
+      if(k < n) {
+        ACTI(k) = STINGER_EDGE_SOURCE;
+        ACTJ(k) = STINGER_EDGE_DEST;
+      } else {
+        return;
+      }
+      k++;
+    } STINGER_FORALL_EDGES_OF_VTX_END();
+  }
+}
+
 int
 main (const int argc, char *argv[])
 {
@@ -180,19 +205,14 @@ main (const int argc, char *argv[])
 
         const int64_t endact = (actno + batch_size > naction ? naction : actno + batch_size);
         int64_t numActions = endact - actno;
-        for(uint64_t k = 0; k < numActions; k++) {
-          const int64_t i = rand() % nv;
-          const int64_t j = rand() % nv;
-          ACTI(k) = i;
-          ACTJ(k) = j;
-        }
+        existing_edges(numActions);
 
         tic();
         /* MTA("mta assert parallel") */
         /* MTA("mta block dynamic schedule") */
         /* OMP("omp parallel for") */
         for(uint64_t k = 0; k < numActions; k++) {
-          stinger_insert_edge (S, 0, ACTI(k), ACTJ(k), 1, actno+2);
+          stinger_remove_edge(S, 0, ACTI(k), ACTJ(k));
         }
 
         insert_time_trace[ntrace] = toc();
@@ -211,16 +231,12 @@ main (const int argc, char *argv[])
         /* MTA("mta assert parallel") */
         /*   MTA("mta block dynamic schedule") */
         /*   OMP("omp parallel for") */
-        for(uint64_t k = 0; k < endact - actno; k++) {
-          const int64_t i = rand() % nv;
-          const int64_t j = rand() % nv;
-          ACTI(k) = i;
-          ACTJ(k) = j;
-        }
+        /* random_edges(numActions); */
+        existing_edges(numActions);
 
         tic();
         for(uint64_t k = 0; k < endact - actno; k++) {
-          stinger_remove_edge(S, 0, ACTI(k), ACTJ(k));
+          stinger_insert_edge (S, 0, ACTI(k), ACTJ(k), 1, actno+2);
         }
 
         delete_time_trace[ntrace] = toc();
