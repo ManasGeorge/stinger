@@ -123,10 +123,12 @@ struct stinger* load_csr(char * name){
   w = malloc(ne*sizeof(int64_t));
   memset(w,0,ne*sizeof(int64_t));
 
+  int i = 0;
 	for (int v=0; v < nv; v++){
 		for(int32_t e=0; e<off[v+1]-off[v]; e++){
-      sv[e] = v;
-      ev[e] = ind[off[v]];
+      sv[i] = v;
+      ev[i] = ind[off[v]+e];
+      i++;
 		}
 	}
 
@@ -148,20 +150,18 @@ void random_edges(int n) {
   }
 }
 
-void existing_edges(int n) {
+int existing_edges(int n) {
   int64_t k;
   k = 0;
-  for (int64_t v=0; v < nv; v++) {
-    STINGER_FORALL_EDGES_OF_VTX_BEGIN(S,v) {
-      if(k < n) {
-        ACTI(k) = STINGER_EDGE_SOURCE;
-        ACTJ(k) = STINGER_EDGE_DEST;
-      } else {
-        return;
-      }
-      k++;
-    } STINGER_FORALL_EDGES_OF_VTX_END();
-  }
+  STINGER_READ_ONLY_FORALL_EDGES_BEGIN(S, 0) {
+    if(k < n) {
+      ACTI(k) = STINGER_RO_EDGE_SOURCE;
+      ACTJ(k) = STINGER_RO_EDGE_DEST;
+    } else {
+      return k;
+    }
+    k++;
+  } STINGER_READ_ONLY_FORALL_EDGES_END();
 }
 
 int
@@ -171,10 +171,10 @@ main (const int argc, char *argv[])
   STATS_INIT();
 
   S = load_csr(initial_graph_name);
-  for(batch_size = 1000; batch_size < ne/2; batch_size*=2) {
+  for(batch_size = 1000; batch_size < ne; batch_size*=2) {
     nbatch = 10;
     naction = batch_size*nbatch;
-    action = (int64_t*) malloc(2*batch_size*sizeof(int64_t));
+    action = (int64_t*) malloc(2*naction*sizeof(int64_t));
     print_initial_graph_stats (nv, ne, batch_size, nbatch, naction);
     fflush(stdout);
     BATCH_SIZE_CHECK();
@@ -227,12 +227,13 @@ main (const int argc, char *argv[])
 
         const int64_t endact = (actno + batch_size > naction ? naction : actno + batch_size);
         int64_t numActions = endact - actno;
+        existing_edges(numActions);
 
         /* MTA("mta assert parallel") */
         /*   MTA("mta block dynamic schedule") */
         /*   OMP("omp parallel for") */
         /* random_edges(numActions); */
-        existing_edges(numActions);
+        /* existing_edges(numActions); */
 
         tic();
         for(uint64_t k = 0; k < endact - actno; k++) {
