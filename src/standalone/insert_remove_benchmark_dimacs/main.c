@@ -55,7 +55,6 @@ int getline(char **line, size_t *n, FILE* fp) {
 void readGraphDIMACS(char* filePath, int64_t** prmoff, int64_t** prmind,
                      int64_t* prmnv, int64_t* prmne, int isRmat)
 {
-    printf("Filename: %s\n",filePath);
     FILE *fp = fopen (filePath, "r");
     char* line = NULL;
 
